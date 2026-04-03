@@ -53,6 +53,19 @@ python data/cached_fineweb10B.py 9
 
 **Note: torch.compile will add around 7 minutes of latency the first time you run the code.**
 
+## Run with uv (fast Python packaging)
+
+Use the included `pyproject.toml` to manage dependencies with uv. Base deps exclude PyTorch so CPU-only tasks (like dataset download or Modal CLI) don’t pull a CUDA wheel on macOS.
+
+- Install uv (one-time): `pip install uv` (or use Astral’s installer)
+- Create env + install base deps: `uv sync`
+- Download dataset shards (~900M tokens): `uv run python data/cached_fineweb10B.py 9`
+- Train locally (requires PyTorch): `uv sync --extra train` then `uv run torchrun --standalone --nproc_per_node=8 train_gpt.py`
+
+Notes
+- `uv run` executes commands inside the project’s environment created by `uv sync`.
+- Modal GPU image pins its own CUDA-enabled torch; local uv env can keep default PyPI torch (CPU/Metal) when using `--extra train` on macOS.
+
 ## Alternative: Running with Docker (recommended for precise timing)
 
 For cases where CUDA or NCCL versions aren't compatible with your current system setup, Docker can be a helpful alternative.
@@ -70,6 +83,28 @@ To get an interactive docker, you can use
 ```bash
 sudo docker run -it --rm --gpus all -v $(pwd):/modded-nanogpt modded-nanogpt bash
 ```
+
+---
+
+## Run on Modal (CPU prep + 8×H100)
+
+The repo includes a `modal_train.py` to run prep and training on Modal with 8×H100.
+
+- Prereqs: `pip install modal` or `uv sync --extra modal`, then `modal token new` (once) to log in.
+- Prep dataset shards (default 9 chunks ≈ 900M tokens) into a persisted volume using a CPU-only image:
+  - `modal run modal_train.py::main --mode prep_data --chunks 9`
+- Launch training on 8×H100 (add extra CLI flags via `--args` as needed):
+  - `modal run modal_train.py::main --mode train`
+
+Tips
+- Always include `::main` when using `modal run` on this file, e.g. `modal run modal_train.py::main --mode prep_data`.
+- If you prefer to route via uv, ensure the env has modal: `uv sync --extra modal` then `uv run modal run modal_train.py::main --mode prep_data`.
+
+Notes
+- Uses two images: a CPU-only base for downloads and a CUDA-enabled base for training.
+- The repo is mounted at `/workspace`; `/workspace/data` uses a persisted Volume so downloads and checkpoints persist.
+- Training uses `torchrun --standalone --nproc_per_node=8 train_gpt.py` so DDP env variables are set as expected.
+- The GPU image installs CUDA-enabled nightly torch (cu126), mirroring the Dockerfile. Adjust in `modal_train.py` if you want a different build.
 
 ---
 
@@ -349,4 +384,3 @@ compared to Shampoo.
 ```
 
 <img src="img/dofa.jpg" alt="itsover_wereback" style="width:100%;">
-

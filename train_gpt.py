@@ -29,8 +29,21 @@ import triton
 import triton.language as tl
 from kernels import get_kernel
 from torch import Tensor, nn
+from low_rank_newton import (
+    truncated_svd_precondition,
+    adaptive_truncated_svd_precondition,
+    hybrid_polar_newton,
+    detect_saddle_region
+)
+from simbaw_optimizer import NorSimbaW
 
 dynamo.config.recompile_limit = 64
+
+# -----------------------------------------------------------------------------
+# Optimizer Configuration
+# Choose which optimizer to use for 2D parameters (hidden_matrix_params + gate_params)
+# Options: "normuon", "normuon_svd", "simbaw"
+OPTIMIZER_2D = "normuon_svd"  # Change this to switch optimizers
 
 # -----------------------------------------------------------------------------
 # Custom operators: FP8 matmul by @YouJiacheng
@@ -364,6 +377,49 @@ def ba_plus_cAA(A: torch.Tensor, alpha: float, beta: float, out: torch.Tensor):
     )
     return out
 
+# # Computed for num_iters=5, safety_factor=2e-2, cushion=2
+# polar_express_coeffs = [
+#     (8.156554524902461, -22.48329292557795, 15.878769915207462),
+#     (4.042929935166739, -2.808917465908714, 0.5000178451051316),
+#     (3.8916678022926607, -2.772484153217685, 0.5060648178503393),
+#     (3.285753657755655, -2.3681294933425376, 0.46449024233003106),
+#     (2.3465413258596377, -1.7097828382687081, 0.42323551169305323)
+# ]
+
+# @torch.compile(dynamic=False, fullgraph=True) # Must use dynamic=False or else it's much slower
+# def polar_express(G: torch.Tensor):
+#     """
+#     Polar Express Sign Method: https://arxiv.org/pdf/2505.16932
+#     by Noah Amsel, David Persson, Christopher Musco, Robert M. Gower.
+#     """
+#     X = G.bfloat16()
+#     if G.size(-2) > G.size(-1):
+#         X = X.mT
+
+#     # Ensure spectral norm is at most 1
+#     X = X / (X.norm(dim=(-2, -1), keepdim=True) * (1 + 2e-2) + 1e-6)
+
+#     # Allocate buffers
+#     X = X.contiguous()
+#     A = torch.empty((*X.shape[:-1], X.size(-2)), device=X.device, dtype=X.dtype)
+#     B = torch.empty_like(A)
+#     C = torch.empty_like(X)
+
+#     aX_plus_BX = torch.baddbmm if X.ndim > 2 else torch.addmm
+
+#     # Perform the iterations
+#     for a, b, c in polar_express_coeffs:
+#         XXT(X, out=A)  # A = X @ X.mT
+#         ba_plus_cAA(A, alpha=c, beta=b, out=B)  # B = b * A + c * A @ A
+#         aX_plus_BX(X, B, X, beta=a, out=C)  # C = a * X + B @ X
+#         X, C = C, X  # Swap references to avoid unnecessary copies
+
+#     if G.size(-2) > G.size(-1):
+#         X = X.mT
+#     return X
+
+import torch
+
 # Computed for num_iters=5, safety_factor=2e-2, cushion=2
 polar_express_coeffs = [
     (8.156554524902461, -22.48329292557795, 15.878769915207462),
@@ -373,38 +429,64 @@ polar_express_coeffs = [
     (2.3465413258596377, -1.7097828382687081, 0.42323551169305323)
 ]
 
-@torch.compile(dynamic=False, fullgraph=True) # Must use dynamic=False or else it's much slower
-def polar_express(G: torch.Tensor):
+@torch.compile(dynamic=False, fullgraph=True)  # Must use dynamic=False or else it's much slower
+def polar_express(G: torch.Tensor, sketch_cols: int = 128):
     """
     Polar Express Sign Method: https://arxiv.org/pdf/2505.16932
     by Noah Amsel, David Persson, Christopher Musco, Robert M. Gower.
+
+    With Nyström-style column sampling:
+
+      - If sketch_cols > 0 and sketch_cols < K (number of columns),
+        the Gram matrix XX^T is approximated using only the first
+        `sketch_cols` columns of X:
+
+            X_sketch = X[..., :, :sketch_cols]
+            A ≈ X_sketch @ X_sketch^T
+
+      - Otherwise, we recover the original exact XX^T.
     """
+
     X = G.bfloat16()
+    transposed = False
     if G.size(-2) > G.size(-1):
         X = X.mT
+        transposed = True
 
-    # Ensure spectral norm is at most 1
+    # Ensure spectral norm is at most 1 (original scaling)
     X = X / (X.norm(dim=(-2, -1), keepdim=True) * (1 + 2e-2) + 1e-6)
 
     # Allocate buffers
     X = X.contiguous()
-    A = torch.empty((*X.shape[:-1], X.size(-2)), device=X.device, dtype=X.dtype)
+    M = X.size(-2)
+    A = torch.empty((*X.shape[:-2], M, M), device=X.device, dtype=X.dtype)
     B = torch.empty_like(A)
     C = torch.empty_like(X)
 
     aX_plus_BX = torch.baddbmm if X.ndim > 2 else torch.addmm
 
     # Perform the iterations
+    sketch_cols = 0 #int(X.size(1)*.5)
     for a, b, c in polar_express_coeffs:
-        XXT(X, out=A)  # A = X @ X.mT
-        ba_plus_cAA(A, alpha=c, beta=b, out=B)  # B = b * A + c * A @ A
-        aX_plus_BX(X, B, X, beta=a, out=C)  # C = a * X + B @ X
+        # --- Nyström-style column sampling for Gram matrix ---
+        if sketch_cols > 0 and X.size(-1) > sketch_cols:
+            # Use only a subset of columns to build an approximate Gram
+            X_sketch = X[..., :, :sketch_cols]  # (..., M, s)
+            XXT(X_sketch, out=A)                # A ≈ X_sketch @ X_sketch^T
+        else:
+            # Exact Gram
+            XXT(X, out=A)                       # A = X @ X.mT
+
+        # B = b * A + c * A @ A
+        ba_plus_cAA(A, alpha=c, beta=b, out=B)
+
+        # C = a * X + B @ X
+        aX_plus_BX(X, B, X, beta=a, out=C)
         X, C = C, X  # Swap references to avoid unnecessary copies
 
-    if G.size(-2) > G.size(-1):
+    if transposed:
         X = X.mT
     return X
-
 
 # -----------------------------------------------------------------------------
 # NorMuon optimizer
@@ -445,10 +527,21 @@ class NorMuon(torch.optim.Optimizer):
         8. wait on 4, then compute update of 4 and schedule all gather
         9. wait for each all gather to complete and update params
     Empirically, leading with small params provides an additional 0.2s improvement.
+
+    Extended with Low-Rank Newton methods from "A Multilevel Low-Rank Newton Method" (2023):
+    - use_truncated_svd: Use truncated SVD-based preconditioning instead of polar_express
+    - newton_rank: Rank for SVD truncation (higher = more accurate but slower)
+    - newton_nu: Eigenvalue threshold for handling small/negative eigenvalues
+    - hybrid_blend: Blend factor between polar and truncated SVD (0=SVD, 1=polar)
     """
-    def __init__(self, params, lr=0.02, weight_decay=0.01, momentum=0.95, beta2=0.95, custom_sizing=True):
+    def __init__(self, params, lr=0.02, weight_decay=0.01, momentum=0.95, beta2=0.95, custom_sizing=True,
+                 use_truncated_svd=False, newton_rank=128, newton_nu=1e-6, hybrid_blend=0.0):
         defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, beta2=beta2)
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
+        self.use_truncated_svd = use_truncated_svd
+        self.newton_rank = newton_rank
+        self.newton_nu = newton_nu
+        self.hybrid_blend = hybrid_blend
         # custom sizing requires 8 GPUs
         if custom_sizing and dist.get_world_size()==8:
             param_groups = self.generate_custom_param_groups(params)
@@ -590,7 +683,29 @@ class NorMuon(torch.optim.Optimizer):
             if num_params == 0:
                 v_chunk = updated_grads
             else:
-                v_chunk = polar_express(updated_grads)
+                # Choose orthogonalization method based on settings
+                if self.use_truncated_svd:
+                    # Use truncated SVD-based preconditioning from the paper
+                    if self.hybrid_blend > 0.0:
+                        # Hybrid approach: blend polar and truncated SVD
+                        v_chunk = hybrid_polar_newton(
+                            updated_grads,
+                            rank=self.newton_rank,
+                            nu=self.newton_nu,
+                            blend_factor=self.hybrid_blend,
+                            polar_iters=3  # Reduced for speed
+                        )
+                    else:
+                        # Pure truncated SVD with eigenvalue thresholding
+                        v_chunk = adaptive_truncated_svd_precondition(
+                            updated_grads,
+                            rank=self.newton_rank,
+                            nu_base=self.newton_nu,
+                            adaptive_nu=True
+                        )
+                else:
+                    # Original polar_express method
+                    v_chunk = polar_express(updated_grads)
 
             # NorMuon: second_momentum_buffer tracks squared magnitude of gradients along one dim (https://arxiv.org/pdf/2510.05491)
             v_norm = v_chunk.norm(dim=(-2, -1), keepdim=True)
@@ -1222,7 +1337,7 @@ class Hyperparameters:
 
 args = Hyperparameters()
 
-data_path = os.environ.get("DATA_PATH", ".")
+data_path = os.environ.get("DATA_PATH", "/")
 args.train_files = os.path.join(data_path, args.train_files)
 args.val_files = os.path.join(data_path, args.val_files)
 
@@ -1297,7 +1412,56 @@ optimizer1 = DistAdam(
     eps=1e-8,
     weight_decay=0.0,
 )
-optimizer2 = NorMuon(hidden_matrix_params + gate_params, lr=0.03, momentum=0.95, beta2=0.95, weight_decay=0.0)
+
+# Initialize optimizer for 2D parameters based on OPTIMIZER_2D config
+if OPTIMIZER_2D == "normuon":
+    # Original NorMuon with polar_express
+    optimizer2 = NorMuon(
+        hidden_matrix_params + gate_params,
+        lr=0.03,
+        momentum=0.95,
+        beta2=0.95,
+        weight_decay=0.0,
+        use_truncated_svd=False,  # Use original polar_express
+    )
+    if master_process:
+        print("Using NorMuon with polar_express")
+
+elif OPTIMIZER_2D == "normuon_svd":
+    # NorMuon with truncated SVD (Low-Rank Newton from paper)
+    optimizer2 = NorMuon(
+        hidden_matrix_params + gate_params,
+        lr=0.03,
+        momentum=0.95,
+        beta2=0.95,
+        weight_decay=0.0,
+        use_truncated_svd=True,
+        newton_rank=128,
+        newton_nu=1e-6,
+        hybrid_blend=0.0,
+    )
+    if master_process:
+        print("Using NorMuon with Truncated SVD (rank=128)")
+
+elif OPTIMIZER_2D == "simbaw":
+    # NorSimbaW optimizer (SimbaW with NorMuon structure)
+    optimizer2 = NorSimbaW(
+        hidden_matrix_params + gate_params,
+        lr=0.03,               # Learning rate
+        weight_decay=0.0,      # Decoupled weight decay
+        momentum=0.95,         # Momentum for gradient EMA
+        beta2=0.95,            # Second moment estimation
+        coarse_dim_perc=0.5,   # Sample 50% of dimensions (SimbaW-specific)
+        rank=20,               # SVD rank for preconditioning (SimbaW-specific)
+        eps=1e-8,              # Numerical stability
+        custom_sizing=True,    # Use NorMuon's custom parameter grouping
+    )
+    if master_process:
+        print("Using NorSimbaW (coarse_dim_perc=0.5, rank=20)")
+
+else:
+    raise ValueError(f"Unknown OPTIMIZER_2D: {OPTIMIZER_2D}. Choose from: normuon, normuon_svd, simbaw")
+
 optimizers = [optimizer1, optimizer2]
 for opt in optimizers:
     for group in opt.param_groups:

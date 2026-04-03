@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Muon Optimizer – Intuition Lab</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px 0 40px;
+      display: flex;
+      justify-content: center;
+      background: radial-gradient(circle at top, #f5f7ff, #e2e8f0);
+      color: #0f172a;
+    }
+
+    .page {
+      max-width: 1040px;
+      width: 100%;
+      padding: 0 20px;
+    }
+
+    header {
+      margin-bottom: 26px;
+    }
+
+    .eyebrow {
+      font-size: 0.8rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #6366f1;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    h1 {
+      font-size: 1.65rem;
+      margin: 0 0 4px;
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: #4b5563;
+      max-width: 620px;
+    }
+
+    section {
+      margin-bottom: 26px;
+    }
+
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title span.badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.8);
+      background: rgba(248, 250, 252, 0.9);
+      color: #4b5563;
+    }
+
+    .section-body {
+      font-size: 0.88rem;
+      color: #4b5563;
+      line-height: 1.6;
+      max-width: 840px;
+    }
+
+    .card {
+      margin-top: 10px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      box-shadow: 0 18px 35px rgba(15, 23, 42, 0.16);
+      padding: 18px 20px 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.9fr);
+      gap: 18px;
+    }
+
+    .card-header {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-sub {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 900px) {
+      .card {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    canvas {
+      border-radius: 18px;
+      background: radial-gradient(circle at center, #f9fafb, #e5e7eb);
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.4);
+      max-width: 100%;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .pill {
+      font-size: 0.72rem;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #4338ca;
+      border: 1px solid rgba(129, 140, 248, 0.3);
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 0.82rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: #4f46e5;
+    }
+
+    .slider-label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6b7280;
+      margin-bottom: 2px;
+    }
+
+    .badge-small {
+      font-size: 0.74rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(248, 250, 252, 0.95);
+      color: #374151;
+    }
+
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 6px 13px;
+      font-size: 0.8rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #4f46e5;
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 8px 15px rgba(79, 70, 229, 0.3);
+      transition: transform 0.08s ease, box-shadow 0.08s ease,
+        background 0.12s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 11px 22px rgba(79, 70, 229, 0.4);
+      background: #4338ca;
+    }
+
+    button:active {
+      transform: translateY(0px);
+      box-shadow: 0 6px 10px rgba(79, 70, 229, 0.3);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #4b5563;
+      margin-top: 6px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+
+    .dot-raw {
+      background: #ef4444;
+    }
+
+    .dot-orth {
+      background: #0ea5e9;
+    }
+
+    .dot-mix {
+      background: #22c55e;
+    }
+
+    .dot-true {
+      background: #6366f1;
+    }
+
+    .dot-approx {
+      background: #22c55e;
+    }
+
+    .explanation {
+      font-size: 0.82rem;
+      color: #4b5563;
+      line-height: 1.5;
+    }
+
+    .explanation strong {
+      color: #111827;
+    }
+
+    .footer-note {
+      font-size: 0.74rem;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tiny-note {
+      font-size: 0.74rem;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="eyebrow">Muon optimizer intuition</div>
+      <h1>Why orthogonal, spectral-norm–aware updates help</h1>
+      <p class="subtitle">
+        These mini applets are toy visualizations. They don’t simulate a full
+        LLM, but they give geometric intuition: Muon re-shapes gradient updates
+        at the <em>matrix</em> level so you don’t just follow a single dominant
+        direction. The Nyström applet at the end shows how you can approximate
+        big “curvature” matrices using only a few columns.
+      </p>
+    </header>
+
+    <!-- SECTION 1: Story -->
+    <section>
+      <div class="section-title">
+        1. Big picture
+        <span class="badge">Conceptual walkthrough</span>
+      </div>
+      <div class="section-body">
+        A weight matrix in a transformer layer doesn’t just have a “size” – it
+        has <strong>directions</strong> (its singular vectors) and
+        <strong>scales</strong> (its singular values).
+        <br /><br />
+        • With Adam/AdamW, the update can become dominated by a few
+        high-variance directions in the gradient. You’re effectively following a
+        narrow valley dominated by one mode. <br />
+        • Muon takes the gradient momentum for a matrix and
+        <strong>orthogonalizes it</strong> (think “SVD, then keep
+        <code>UVᵀ</code>) so the update acts like a
+        <strong>balanced rotation + scaling</strong>, rather than stretching
+        along just one direction. <br /><br />
+        The applets below illustrate that:
+        <br />
+        • Applet A: “many gradients collapse to one direction” vs “spread across
+        orthogonal directions”. <br />
+        • Applet B: plain gradient descent in an anisotropic quadratic vs a
+        “Muon-like” preconditioned step. <br />
+        • Applet C (Nyström): how to approximate a big PSD matrix (e.g. a
+        kernel or curvature-like matrix) using only a few of its columns.
+      </div>
+    </section>
+
+    <!-- SECTION 2: Applet A -->
+    <section>
+      <div class="section-title">
+        2. Many gradient directions vs orthogonal Muon update
+        <span class="badge">Applet A</span>
+      </div>
+      <div class="section-body">
+        Think of each arrow as a column of a gradient matrix. If they all point
+        in nearly the same direction, your update is effectively
+        <em>one-dimensional</em>. Muon orthogonalizes and rescales them so you
+        use multiple independent directions.
+      </div>
+
+      <div class="card">
+        <div>
+          <div class="card-header">Gradient geometry at the matrix level</div>
+          <div class="card-sub">
+            Red = raw directions (Adam-like), Blue = orthogonal Muon-style,
+            Green = what you “actually use” for this slider setting.
+          </div>
+          <canvas id="muonCanvasA" width="420" height="420"></canvas>
+          <div class="legend">
+            <span class="legend-item">
+              <span class="dot dot-raw"></span> Raw gradient directions
+            </span>
+            <span class="legend-item">
+              <span class="dot dot-orth"></span> Muon orthogonalized directions
+            </span>
+            <span class="legend-item">
+              <span class="dot dot-mix"></span> Interpolated update
+            </span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div>
+            <div class="slider-label">Update style</div>
+            <div class="controls-row">
+              <span class="tiny-note">Adam-like</span>
+              <input
+                id="mixSliderA"
+                type="range"
+                min="0"
+                max="100"
+                value="25"
+              />
+              <span class="tiny-note">Muon-like</span>
+              <span class="badge-small" id="modeLabelA">Closer to Adam</span>
+            </div>
+          </div>
+
+          <button id="newExampleBtnA">
+            New random gradient configuration
+            <span style="font-size: 1.1rem;">↻</span>
+          </button>
+
+          <div class="explanation">
+            • When the slider is on the left, the green arrows are close to the
+            <strong>red</strong> ones: several columns of the gradient point in
+            almost the same direction.
+            <br />
+            • As you move the slider right, you mix in the
+            <strong>blue</strong> orthogonal directions. This is analogous to
+            Muon’s <code>(MMᵀ)<sup>-1/2</sup>M</code> step: it
+            <strong>spreads</strong> the update across multiple directions with
+            comparable magnitude. <br />
+            • That’s why Muon behaves like a cheap second-order method:
+            it stops a single mode from dominating and lets the model learn
+            richer structure in parameter space.
+          </div>
+
+          <div class="footer-note">
+            In the real optimizer, the orthogonalization is done via a
+            Newton–Schulz iteration on the momentum matrix rather than an
+            explicit Gram–Schmidt in 2D, but the geometric idea is the same.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: Applet B -->
+    <section>
+      <div class="section-title">
+        3. Walking down an anisotropic valley
+        <span class="badge">Applet B</span>
+      </div>
+      <div class="section-body">
+        Now imagine a simple quadratic loss:
+        <code>f(x) = ½ (9x₁² + x₂²)</code>. This is a skinny valley: steep in
+        <code>x₁</code>, shallow in <code>x₂</code>. Plain gradient descent
+        “zig-zags” slowly. A curvature-aware update (like Newton or a
+        Muon-style preconditioner) rescales directions so steps are more direct.
+      </div>
+
+      <div class="card">
+        <div>
+          <div class="card-header">Descent paths in a skinny valley</div>
+          <div class="card-sub">
+            Purple contours: level sets of the loss. You start at the big dot.
+            Red path: plain gradient descent. Green path: “Muon-like”
+            preconditioned descent.
+          </div>
+          <canvas id="muonCanvasB" width="420" height="360"></canvas>
+        </div>
+
+        <div class="controls">
+          <div>
+            <div class="slider-label">Step size (learning rate)</div>
+            <div class="controls-row">
+              <span class="tiny-note">Smaller</span>
+              <input
+                id="lrSliderB"
+                type="range"
+                min="5"
+                max="35"
+                value="18"
+              />
+              <span class="tiny-note">Larger</span>
+              <span class="badge-small" id="lrLabelB">η = 0.18</span>
+            </div>
+          </div>
+
+          <div class="controls-row">
+            <button id="resetBtnB">Reset start point</button>
+            <button id="stepBtnB">Step once</button>
+            <button id="runBtnB">Run 20 steps</button>
+          </div>
+
+          <div class="explanation">
+            • The <strong>red</strong> path uses plain gradient descent:
+            <code>x ← x − η ∇f(x)</code>. Because the curvature is 9× larger in
+            <code>x₁</code> than in <code>x₂</code>, the steps overshoot and
+            zig-zag. <br />
+            • The <strong>green</strong> path uses a simple
+            “Muon-like” preconditioner that rescales directions based on
+            curvature (here just a diagonal matrix). This roughly equalizes
+            effective curvature, so steps move more <strong>directly</strong>
+            toward the minimum. <br /><br />
+            In Muon, something analogous happens at the matrix level: the
+            <code>(MMᵀ)<sup>-1/2</sup></code> factor plays the role of a
+            spectral, second-order-ish preconditioner that equalizes update
+            magnitudes across singular directions of the weight matrix.
+          </div>
+
+          <div class="footer-note">
+            This toy example uses a 2D quadratic and a diagonal preconditioner.
+            Real Muon uses the gradient’s matrix structure instead of an
+            explicit Hessian, but the qualitative effect on the optimization
+            path is similar.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: Nyström column sketching -->
+    <section>
+      <div class="section-title">
+        4. Nyström column sketching: big matrices from a few columns
+        <span class="badge">Applet C</span>
+      </div>
+      <div class="section-body">
+        In second-order-ish methods, you often want to use a big PSD matrix:
+        a kernel matrix, a Fisher matrix, or something curvature-like. Forming
+        it exactly is too expensive. <br /><br />
+        The Nyström trick says:
+        <strong>“I don’t need the whole matrix, I just need a few of its
+          columns (landmarks), and I’ll reconstruct an approximation from
+          those.”</strong> That’s very similar in spirit to what you’d do if
+        you tried to approximate Muon’s spectral preconditioner with a low-rank
+        sketch.
+      </div>
+
+      <div class="card">
+        <div>
+          <div class="card-header">Approximating a kernel with Nyström</div>
+          <div class="card-sub">
+            Left: full RBF kernel matrix for 1D points. Right: Nyström
+            approximation using only a few landmark columns.
+          </div>
+          <canvas id="muonCanvasC" width="420" height="360"></canvas>
+          <div class="legend">
+            <span class="legend-item">
+              <span class="dot dot-true"></span> True kernel K
+            </span>
+            <span class="legend-item">
+              <span class="dot dot-approx"></span> Nyström approx Ŝ
+            </span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div>
+            <div class="slider-label">Number of landmark columns</div>
+            <div class="controls-row">
+              <span class="tiny-note">Few</span>
+              <input
+                id="landmarkSliderC"
+                type="range"
+                min="2"
+                max="10"
+                value="3"
+              />
+              <span class="tiny-note">More</span>
+              <span class="badge-small" id="landmarkLabelC">
+                m = 3 columns
+              </span>
+            </div>
+          </div>
+
+          <button id="resampleBtnC">
+            Resample landmark columns
+            <span style="font-size: 1.1rem;">↻</span>
+          </button>
+
+          <div class="explanation">
+            • We place 20 points along a line, build their
+            <strong>RBF kernel</strong> matrix K (left heatmap). <br />
+            • Then we randomly pick <strong>m columns</strong> (landmarks).
+            Nyström builds
+            <code>K̃ = C W⁻¹ Cᵀ</code>, where C is those columns, and W is the
+            small m×m submatrix on the landmarks. That’s the right heatmap. <br />
+            • As you increase m, the approximation improves:
+            more columns = a richer low-rank sketch. <br /><br />
+            Intuition link to Muon / second-order: if you ever wanted a
+            full spectral preconditioner but couldn’t afford the complete
+            matrix, Nyström is the conceptual move:
+            <strong>“use a few well-chosen columns to capture most of the
+              structure”</strong>.
+          </div>
+
+          <div class="footer-note">
+            In practice, Nyström is used with smarter column sampling (e.g. via
+            leverage scores). Here we just sample uniformly to keep the picture
+            simple and visual.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ========= Shared helper: small math utilities =========
+    function randn() {
+      // Box–Muller
+      let u = 0,
+        v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+
+    function norm2(v) {
+      return Math.sqrt(v.x * v.x + v.y * v.y);
+    }
+
+    function dot2(a, b) {
+      return a.x * b.x + a.y * b.y;
+    }
+
+    function scale2(v, s) {
+      return { x: v.x * s, y: v.y * s };
+    }
+
+    function add2(a, b) {
+      return { x: a.x + b.x, y: a.y + b.y };
+    }
+
+    function sub2(a, b) {
+      return { x: a.x - b.x, y: a.y - b.y };
+    }
+
+    // ========= Applet A: Dominant vs orthogonal directions =========
+    (function () {
+      const canvas = document.getElementById("muonCanvasA");
+      const ctx = canvas.getContext("2d");
+      const mixSlider = document.getElementById("mixSliderA");
+      const newExampleBtn = document.getElementById("newExampleBtnA");
+      const modeLabel = document.getElementById("modeLabelA");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const origin = { x: W / 2, y: H / 2 };
+      const baseRadius = 140;
+
+      let g1, g2;
+      let o1, o2;
+
+      function generateCorrelatedGradients() {
+        // base direction
+        const angle = Math.random() * Math.PI * 2;
+        const base = { x: Math.cos(angle), y: Math.sin(angle) };
+        const noiseAngle = angle + (Math.random() - 0.5) * (Math.PI / 6);
+
+        const baseMag1 = 0.6 + Math.random() * 0.6;
+        const baseMag2 = 0.4 + Math.random() * 0.8;
+
+        const g1 = { x: baseMag1 * base.x, y: baseMag1 * base.y };
+        const g2 = {
+          x: baseMag2 * Math.cos(noiseAngle),
+          y: baseMag2 * Math.sin(noiseAngle),
+        };
+        return [g1, g2];
+      }
+
+      function orthogonalize(g1, g2) {
+        // Gram–Schmidt in 2D
+        let u1 = { ...g1 };
+        const n1 = norm2(u1) || 1e-6;
+        u1 = scale2(u1, 1 / n1);
+
+        const projCoeff = dot2(g2, u1);
+        const proj = scale2(u1, projCoeff);
+        let v2 = sub2(g2, proj);
+        const n2 = norm2(v2) || 1e-6;
+        v2 = scale2(v2, 1 / n2);
+
+        const avgLen = 0.5 * (norm2(g1) + norm2(g2));
+        const o1 = scale2(u1, avgLen);
+        const o2 = scale2(v2, avgLen);
+        return [o1, o2];
+      }
+
+      function project(v) {
+        return {
+          x: origin.x + v.x * baseRadius,
+          y: origin.y - v.y * baseRadius,
+        };
+      }
+
+      function clearCanvas() {
+        ctx.clearRect(0, 0, W, H);
+      }
+
+      function drawAxes() {
+        ctx.save();
+        ctx.strokeStyle = "rgba(148,163,184,0.8)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+
+        ctx.beginPath();
+        ctx.moveTo(origin.x, 20);
+        ctx.lineTo(origin.x, H - 20);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(20, origin.y);
+        ctx.lineTo(W - 20, origin.y);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function drawArrow(start, end, color, alpha, width) {
+        const headLength = 10;
+        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = width;
+
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(end.x, end.y);
+        ctx.lineTo(
+          end.x - headLength * Math.cos(angle - Math.PI / 6),
+          end.y - headLength * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          end.x - headLength * Math.cos(angle + Math.PI / 6),
+          end.y - headLength * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function updateModeLabel(mix) {
+        if (mix < 0.25) modeLabel.textContent = "Closer to Adam";
+        else if (mix < 0.75) modeLabel.textContent = "Mixed update";
+        else modeLabel.textContent = "Closer to Muon";
+      }
+
+      function drawScene() {
+        const mix = parseInt(mixSlider.value, 10) / 100;
+        updateModeLabel(mix);
+
+        clearCanvas();
+        drawAxes();
+
+        const raw1 = g1;
+        const raw2 = g2;
+        const orth1 = o1;
+        const orth2 = o2;
+
+        const mix1 = add2(scale2(raw1, 1 - mix), scale2(orth1, mix));
+        const mix2 = add2(scale2(raw2, 1 - mix), scale2(orth2, mix));
+
+        // Draw raw (red)
+        drawArrow(origin, project(raw1), "#ef4444", 0.5, 1.5);
+        drawArrow(origin, project(raw2), "#ef4444", 0.5, 1.5);
+
+        // Draw orthogonalized (blue)
+        drawArrow(origin, project(orth1), "#0ea5e9", 0.45, 1.5);
+        drawArrow(origin, project(orth2), "#0ea5e9", 0.45, 1.5);
+
+        // Draw mixed (green)
+        drawArrow(origin, project(mix1), "#22c55e", 0.95, 3);
+        drawArrow(origin, project(mix2), "#22c55e", 0.95, 3);
+      }
+
+      function newExample() {
+        [g1, g2] = generateCorrelatedGradients();
+        [o1, o2] = orthogonalize(g1, g2);
+        drawScene();
+      }
+
+      mixSlider.addEventListener("input", drawScene);
+      newExampleBtn.addEventListener("click", newExample);
+
+      // initial
+      newExample();
+    })();
+
+    // ========= Applet B: Anisotropic quadratic descent paths =========
+    (function () {
+      const canvas = document.getElementById("muonCanvasB");
+      const ctx = canvas.getContext("2d");
+      const lrSlider = document.getElementById("lrSliderB");
+      const lrLabel = document.getElementById("lrLabelB");
+      const resetBtn = document.getElementById("resetBtnB");
+      const stepBtn = document.getElementById("stepBtnB");
+      const runBtn = document.getElementById("runBtnB");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const origin = { x: W / 2, y: H / 2 };
+      const scale = 70; // pixels per unit
+
+      // Quadratic f(x) = 0.5 * (9 x1^2 + x2^2)
+      const A = [
+        [9, 0],
+        [0, 1],
+      ];
+
+      // "Muon-like" preconditioner P ~ diag(1/3, 1)
+      const P = [
+        [1 / 3, 0],
+        [0, 1],
+      ];
+
+      let xGD;
+      let xMuon;
+      let historyGD = [];
+      let historyMuon = [];
+
+      function grad(x) {
+        // ∇f = A x
+        return {
+          x: A[0][0] * x.x + A[0][1] * x.y,
+          y: A[1][0] * x.x + A[1][1] * x.y,
+        };
+      }
+
+      function precondition(v) {
+        return {
+          x: P[0][0] * v.x + P[0][1] * v.y,
+          y: P[1][0] * v.x + P[1][1] * v.y,
+        };
+      }
+
+      function projectB(v) {
+        return {
+          x: origin.x + v.x * scale,
+          y: origin.y - v.y * scale,
+        };
+      }
+
+      function clear() {
+        ctx.clearRect(0, 0, W, H);
+      }
+
+      function drawContours() {
+        ctx.save();
+        ctx.strokeStyle = "rgba(129,140,248,0.9)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+
+        const levels = [0.5, 1, 1.5, 2, 3, 4, 5];
+        for (const c of levels) {
+          const steps = 80;
+          ctx.beginPath();
+          for (let i = 0; i <= steps; i++) {
+            const t = (2 * Math.PI * i) / steps;
+            // 9 x1^2 + x2^2 = 2c
+            const r1 = Math.sqrt((2 * c) / 9);
+            const r2 = Math.sqrt(2 * c);
+            const x = r1 * Math.cos(t);
+            const y = r2 * Math.sin(t);
+            const p = projectB({ x, y });
+            if (i === 0) ctx.moveTo(p.x, p.y);
+            else ctx.lineTo(p.x, p.y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+
+        // axes
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "rgba(148,163,184,0.9)";
+        ctx.beginPath();
+        ctx.moveTo(origin.x, 10);
+        ctx.lineTo(origin.x, H - 10);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(10, origin.y);
+        ctx.lineTo(W - 10, origin.y);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function drawPoint(v, color) {
+        const p = projectB(v);
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawPath(points, color) {
+        if (points.length < 2) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const p0 = projectB(points[0]);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < points.length; i++) {
+          const p = projectB(points[i]);
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function getLR() {
+        const v = parseInt(lrSlider.value, 10);
+        const lr = v / 100; // 0.05–0.35
+        return lr;
+      }
+
+      function updateLRLabel() {
+        const lr = getLR();
+        lrLabel.textContent = "η = " + lr.toFixed(2);
+      }
+
+      function resetWithHistory() {
+        xGD = { x: 2.2, y: 1.4 };
+        xMuon = { x: 2.2, y: 1.4 };
+        historyGD = [Object.assign({}, xGD)];
+        historyMuon = [Object.assign({}, xMuon)];
+        fullRedraw();
+      }
+
+      function stepOnceWithHistory() {
+        const lr = getLR();
+
+        const gGD = grad(xGD);
+        xGD = {
+          x: xGD.x - lr * gGD.x,
+          y: xGD.y - lr * gGD.y,
+        };
+        historyGD.push(Object.assign({}, xGD));
+
+        const gM = grad(xMuon);
+        const pg = precondition(gM);
+        xMuon = {
+          x: xMuon.x - lr * pg.x,
+          y: xMuon.y - lr * pg.y,
+        };
+        historyMuon.push(Object.assign({}, xMuon));
+
+        fullRedraw();
+      }
+
+      function fullRedraw() {
+        clear();
+        drawContours();
+        drawPath(historyGD, "#ef4444");
+        drawPath(historyMuon, "#22c55e");
+        drawPoint(historyGD[0], "#0f172a");
+      }
+
+      lrSlider.addEventListener("input", () => {
+        updateLRLabel();
+        fullRedraw();
+      });
+
+      resetBtn.addEventListener("click", resetWithHistory);
+      stepBtn.addEventListener("click", stepOnceWithHistory);
+      runBtn.addEventListener("click", () => {
+        for (let i = 0; i < 20; i++) {
+          stepOnceWithHistory();
+        }
+      });
+
+      // initial
+      updateLRLabel();
+      resetWithHistory();
+    })();
+
+    // ========= Applet C: Nyström column sketching =========
+    (function () {
+      const canvas = document.getElementById("muonCanvasC");
+      const ctx = canvas.getContext("2d");
+      const landmarkSlider = document.getElementById("landmarkSliderC");
+      const landmarkLabel = document.getElementById("landmarkLabelC");
+      const resampleBtn = document.getElementById("resampleBtnC");
+
+      const W = canvas.width;
+      const H = canvas.height;
+
+      const n = 20;
+      let xs = [];
+      let K = [];
+      let Ktilde = [];
+      let landmarks = [];
+
+      const leftMargin = 30;
+      const topMargin = 30;
+      const matSize = 150; // each matrix drawn in a 150x150 square
+      const gap = 40;
+
+      function buildPoints() {
+        xs = [];
+        for (let i = 0; i < n; i++) {
+          xs.push(i / (n - 1)); // 0..1
+        }
+      }
+
+      function rbf(x, y, sigma) {
+        const d = x - y;
+        return Math.exp(-(d * d) / (2 * sigma * sigma));
+      }
+
+      function buildKernel() {
+        const sigma = 0.18;
+        K = new Array(n);
+        for (let i = 0; i < n; i++) {
+          K[i] = new Array(n);
+          for (let j = 0; j < n; j++) {
+            K[i][j] = rbf(xs[i], xs[j], sigma);
+          }
+        }
+      }
+
+      function sampleLandmarks(m) {
+        const idx = [];
+        const used = new Array(n).fill(false);
+        while (idx.length < m) {
+          const r = Math.floor(Math.random() * n);
+          if (!used[r]) {
+            used[r] = true;
+            idx.push(r);
+          }
+        }
+        idx.sort((a, b) => a - b);
+        landmarks = idx;
+      }
+
+      function invertMatrix(mat) {
+        // naive Gauss-Jordan for small m x m
+        const m = mat.length;
+        // deep copy
+        const a = new Array(m);
+        const inv = new Array(m);
+        for (let i = 0; i < m; i++) {
+          a[i] = mat[i].slice();
+          inv[i] = new Array(m).fill(0);
+          inv[i][i] = 1;
+        }
+
+        for (let i = 0; i < m; i++) {
+          let pivot = a[i][i];
+          if (Math.abs(pivot) < 1e-8) {
+            // try to swap
+            for (let r = i + 1; r < m; r++) {
+              if (Math.abs(a[r][i]) > Math.abs(pivot)) {
+                const tmp = a[i];
+                a[i] = a[r];
+                a[r] = tmp;
+                const tmp2 = inv[i];
+                inv[i] = inv[r];
+                inv[r] = tmp2;
+                pivot = a[i][i];
+                break;
+              }
+            }
+          }
+          if (Math.abs(pivot) < 1e-8) {
+            // give up, use identity
+            return inv;
+          }
+
+          const invPivot = 1 / pivot;
+          for (let j = 0; j < m; j++) {
+            a[i][j] *= invPivot;
+            inv[i][j] *= invPivot;
+          }
+          for (let r = 0; r < m; r++) {
+            if (r === i) continue;
+            const factor = a[r][i];
+            for (let c = 0; c < m; c++) {
+              a[r][c] -= factor * a[i][c];
+              inv[r][c] -= factor * inv[i][c];
+            }
+          }
+        }
+        return inv;
+      }
+
+      function buildNystrom() {
+        const m = landmarks.length;
+        // Build C (n x m) and W (m x m)
+        const C = new Array(n);
+        for (let i = 0; i < n; i++) {
+          C[i] = new Array(m);
+          for (let j = 0; j < m; j++) {
+            C[i][j] = K[i][landmarks[j]];
+          }
+        }
+        const Wsmall = new Array(m);
+        for (let i = 0; i < m; i++) {
+          Wsmall[i] = new Array(m);
+          for (let j = 0; j < m; j++) {
+            Wsmall[i][j] = K[landmarks[i]][landmarks[j]];
+          }
+        }
+
+        const Winv = invertMatrix(Wsmall);
+
+        // Ktilde = C W^-1 C^T
+        Ktilde = new Array(n);
+        for (let i = 0; i < n; i++) {
+          Ktilde[i] = new Array(n).fill(0);
+        }
+
+        // Compute C * Winv (n x m)
+        const CW = new Array(n);
+        for (let i = 0; i < n; i++) {
+          CW[i] = new Array(m).fill(0);
+          for (let j = 0; j < m; j++) {
+            let s = 0;
+            for (let k = 0; k < m; k++) {
+              s += C[i][k] * Winv[k][j];
+            }
+            CW[i][j] = s;
+          }
+        }
+
+        // Ktilde = (C Winv) C^T
+        for (let i = 0; i < n; i++) {
+          for (let j = 0; j < n; j++) {
+            let s = 0;
+            for (let k = 0; k < m; k++) {
+              s += CW[i][k] * C[j][k];
+            }
+            Ktilde[i][j] = s;
+          }
+        }
+      }
+
+      function clear() {
+        ctx.clearRect(0, 0, W, H);
+      }
+
+      function drawMatrix(M, x0, y0, size) {
+        const cellSize = size / n;
+        // find min/max (should be [0,1], but be safe)
+        let minVal = Infinity;
+        let maxVal = -Infinity;
+        for (let i = 0; i < n; i++) {
+          for (let j = 0; j < n; j++) {
+            const v = M[i][j];
+            if (v < minVal) minVal = v;
+            if (v > maxVal) maxVal = v;
+          }
+        }
+        const range = maxVal - minVal || 1;
+
+        for (let i = 0; i < n; i++) {
+          for (let j = 0; j < n; j++) {
+            const v = (M[i][j] - minVal) / range;
+            // simple colormap: light to deep blue
+            const c = Math.floor(255 * (1 - v));
+            const r = Math.floor(230 * (1 - v));
+            const g = Math.floor(240 * (1 - 0.5 * v));
+            ctx.fillStyle = `rgb(${r},${g},${c})`;
+            ctx.fillRect(
+              x0 + j * cellSize,
+              y0 + i * cellSize,
+              cellSize + 0.5,
+              cellSize + 0.5
+            );
+          }
+        }
+
+        // border
+        ctx.save();
+        ctx.strokeStyle = "rgba(15,23,42,0.6)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0, y0, size, size);
+        ctx.restore();
+      }
+
+      function drawLandmarks(x0, y0, size) {
+        // draw small ticks under the matrix to show which columns are chosen
+        const cellSize = size / n;
+        const y = y0 + size + 6;
+        ctx.save();
+        ctx.fillStyle = "#22c55e";
+        for (const idx of landmarks) {
+          const x = x0 + (idx + 0.5) * cellSize;
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function drawScene() {
+        clear();
+
+        const xLeft = leftMargin;
+        const yTop = topMargin;
+        const xRight = leftMargin + matSize + gap;
+
+        // True K
+        drawMatrix(K, xLeft, yTop, matSize);
+
+        // Approx Ktilde
+        drawMatrix(Ktilde, xRight, yTop, matSize);
+
+        // Landmarks under both
+        drawLandmarks(xLeft, yTop, matSize);
+        drawLandmarks(xRight, yTop, matSize);
+
+        // labels
+        ctx.save();
+        ctx.fillStyle = "#374151";
+        ctx.font = "12px system-ui";
+        ctx.fillText("True kernel K", xLeft, yTop - 8);
+        ctx.fillText("Nyström approximation K̃", xRight, yTop - 8);
+        ctx.restore();
+      }
+
+      function updateLandmarkLabel() {
+        const m = parseInt(landmarkSlider.value, 10);
+        landmarkLabel.textContent = "m = " + m + " columns";
+      }
+
+      function recompute() {
+        const m = parseInt(landmarkSlider.value, 10);
+        sampleLandmarks(m);
+        buildNystrom();
+        drawScene();
+      }
+
+      landmarkSlider.addEventListener("input", () => {
+        updateLandmarkLabel();
+        recompute();
+      });
+
+      resampleBtn.addEventListener("click", () => {
+        recompute();
+      });
+
+      function init() {
+        buildPoints();
+        buildKernel();
+        updateLandmarkLabel();
+        recompute();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
+
